@@ -52,22 +52,60 @@ function Results() {
         <p className="text-gray-600 italic">"{report.key_insight}"</p>
       </div>
 
+      <div className="mb-6 p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
+        <p className="text-gray-700"><strong>Correct Answers:</strong> {report.correctAnswers} out of {report.totalQuestions}</p>
+      </div>
+
       <div className="grid md:grid-cols-2 gap-6 mb-6">
         <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
           <h4 className="font-bold text-green-800">Strengths</h4>
-          {report.strengths.length > 0 ? (
-            <ul className="list-disc list-inside mt-2 text-green-700">
-              {report.strengths.map((item, i) => <li key={i}>{item}</li>)}
-            </ul>
-          ) : <p className="text-gray-500 mt-2">None identified.</p>}
+          {(() => {
+            let strengthsList = [];
+            if (Array.isArray(report.strengths)) {
+              strengthsList = report.strengths.filter(item => {
+                const str = String(item).trim();
+                return str && str !== '[object Object]';
+              });
+            } else if (typeof report.strengths === 'object' && report.strengths !== null) {
+              strengthsList = Object.entries(report.strengths)
+                .map(([k, v]) => String(k || v).trim())
+                .filter(s => s && s !== '[object Object]');
+            }
+            return strengthsList.length > 0 ? (
+              <ul className="list-disc list-inside mt-2 text-green-700">
+                {strengthsList.map((item, i) => (
+                  <li key={i}>{String(item)}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-gray-500 mt-2">None identified.</p>
+            );
+          })()}
         </div>
         <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
           <h4 className="font-bold text-red-800">Weak Areas</h4>
-          {report.weak_areas.length > 0 ? (
-            <ul className="list-disc list-inside mt-2 text-red-700">
-              {report.weak_areas.map((item, i) => <li key={i}>{item}</li>)}
-            </ul>
-          ) : <p className="text-gray-500 mt-2">None identified. Great job!</p>}
+          {(() => {
+            let weakList = [];
+            if (Array.isArray(report.weak_areas)) {
+              weakList = report.weak_areas.filter(item => {
+                const str = String(item).trim();
+                return str && str !== '[object Object]';
+              });
+            } else if (typeof report.weak_areas === 'object' && report.weak_areas !== null) {
+              weakList = Object.entries(report.weak_areas)
+                .map(([k, v]) => String(k || v).trim())
+                .filter(s => s && s !== '[object Object]');
+            }
+            return weakList.length > 0 ? (
+              <ul className="list-disc list-inside mt-2 text-red-700">
+                {weakList.map((item, i) => (
+                  <li key={i}>{String(item)}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-gray-500 mt-2">None identified. Great job!</p>
+            );
+          })()}
         </div>
       </div>
 
@@ -78,11 +116,34 @@ function Results() {
             <p className="text-gray-700 mb-4">{report.overall_summary}</p>
 
             <h4 className="text-xl font-bold mb-2">Detailed Breakdown</h4>
-            <div className="prose max-w-none text-gray-700 mb-4" dangerouslySetInnerHTML={{ __html: report.detailed_breakdown.replace(/\n/g, '<br />') }} />
-            
+            <div className="text-gray-700 mb-4 leading-relaxed whitespace-pre-wrap">
+              {report.detailed_breakdown
+                .replace(/\*\*/g, '')
+                .replace(/#+\s+/g, '')
+                .replace(/^[\s]*[*+-]\s+/gm, '')
+                .replace(/^\s+[+]\s+/gm, '')
+              }
+            </div>
+
             <h4 className="text-xl font-bold mb-2">Personalized Roadmap</h4>
             <ul className="list-disc list-inside text-gray-700">
-                {report.personalized_roadmap.map((item, i) => <li key={i}>{item}</li>)}
+                {(() => {
+                  let roadmapItems = [];
+                  if (Array.isArray(report.personalized_roadmap)) {
+                    roadmapItems = report.personalized_roadmap
+                      .map(item => {
+                        if (typeof item === 'string') return item;
+                        if (typeof item === 'object' && item !== null) {
+                          return Object.values(item).join(' - ');
+                        }
+                        return String(item);
+                      })
+                      .filter(s => s && s.trim());
+                  }
+                  return roadmapItems.map((item, i) => (
+                    <li key={i}>{String(item)}</li>
+                  ));
+                })()}
             </ul>
         </div>
       </div>

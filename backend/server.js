@@ -28,7 +28,13 @@ app.use(helmet({
 
 // Middleware
 app.use(cors({
-  origin: config.cors.origin,
+  origin: function(origin, callback) {
+    if (!origin || origin.startsWith('http://localhost')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
 }));
 app.use(express.json({ limit: '10kb' }));

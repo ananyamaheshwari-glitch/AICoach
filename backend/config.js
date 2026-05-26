@@ -9,7 +9,7 @@ const config = {
     maxAge: 1000 * 60 * 60 * 24, // 24 hours
   },
   cors: {
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    origin: process.env.CORS_ORIGIN || 'http://localhost:5181',
   },
   huggingface: {
     token: process.env.HUGGINGFACE_HUB_TOKEN,

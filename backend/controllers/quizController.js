@@ -1,6 +1,6 @@
 // controllers/quizController.js
 const { db, dbAll, dbRun } = require('../db/database');
-const aiService = require('../services/aiServices');
+const llmJudge = require('../services/llmJudge');
 
 // Helper function for consistent error responses
 const handleServerError = (res, error, customMessage) => {
@@ -25,26 +25,6 @@ exports.getQuestionsByTopic = async (req, res) => {
   }
 };
 
-/**
- * Handles the AI evaluation workflow for a given set of questions and answers.
- * @param {Array} questions - The array of question objects from the database.
- * @param {Object} user_answers - The user's answers.
- * @returns {Promise<Object>} - A promise that resolves to the full report object.
- */
-async function runAIQuizEvaluation(questions, user_answers) {
-  // LLM Call 1: Get comprehensive initial evaluation
-  const initialEvaluation = await aiService.evaluateAnswers(questions, user_answers);
-  const score = initialEvaluation.score;
-
-  // LLM Call 2 (A or B): Get detailed feedback based on the score
-  const detailedFeedback = await aiService.getDetailedFeedback(score, initialEvaluation);
-
-  // LLM Call 3: Synthesize the final structured report and roadmap
-  const finalReportJson = await aiService.generateFinalReport(initialEvaluation, detailedFeedback);
-
-  // Combine initial evaluation and final report for a complete response object
-  return { ...initialEvaluation, ...finalReportJson };
-}
 
 exports.submitQuiz = async (req, res) => {
   const { validationResult } = require('express-validator');
@@ -70,12 +50,31 @@ exports.submitQuiz = async (req, res) => {
         return res.status(404).json({ message: 'One or more questions not found.' });
     }
 
-    // 2. Run the full AI evaluation workflow
-    const fullReport = await runAIQuizEvaluation(allQuestions, user_answers);
-    const score = fullReport.score;
+    // 2. Calculate score based on correct answers
+    let correctCount = 0;
+    for (const question of allQuestions) {
+      if (user_answers[question.id] === question.correct_option) {
+        correctCount++;
+      }
+    }
+    const score = Math.round((correctCount / allQuestions.length) * 100);
 
-    // 5. Store results in the database
-    // We store the full, combined report as a string in the database.
+    // 3. Get LLM-generated report with analysis
+    const llmReport = await llmJudge.generateReport({
+      questions: allQuestions,
+      user_answers: user_answers,
+      score: score,
+      topic: allQuestions[0]?.topic || 'General'
+    });
+
+    const fullReport = {
+      ...llmReport,
+      score: score,
+      correctAnswers: correctCount,
+      totalQuestions: allQuestions.length
+    };
+
+    // 4. Store results in the database
     const fullReportString = JSON.stringify(fullReport);
     const result = await dbRun(
       db,

@@ -57,6 +57,7 @@ function Quiz() {
         {questions.map((q, index) => (
           <div key={q.id} className="mb-8 p-4 border-b">
             <p className="text-lg font-semibold mb-4">{index + 1}. {q.question_text}</p>
+
             <div className="space-y-2">
               {['A', 'B', 'C', 'D'].map(option => (
                 <label key={option} className="flex items-center p-2 rounded-lg hover:bg-gray-100 cursor-pointer">

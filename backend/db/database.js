@@ -59,7 +59,9 @@ const initializeDB = async () => {
             option_c TEXT NOT NULL,
             option_d TEXT NOT NULL,
             correct_option TEXT NOT NULL CHECK(correct_option IN ('A', 'B', 'C', 'D')),
-            topic TEXT NOT NULL
+            topic TEXT NOT NULL,
+            question_type TEXT DEFAULT 'multiple_choice' CHECK(question_type IN ('multiple_choice', 'open_ended')),
+            evaluation_criteria TEXT
         );
     `;
 
@@ -83,14 +85,17 @@ const initializeDB = async () => {
     const rows = await dbAll(db, 'SELECT COUNT(id) as count FROM questions');
     if (rows[0].count === 0) {
         console.log('Seeding database with questions...');
+
+        // Multiple choice questions
         const seedQuestions = [
-            ['Which of the following is an example of IaaS?', 'Google App Engine', 'Amazon EC2', 'Salesforce', 'Microsoft Office 365', 'B', 'Cloud'],
-            ['What does "serverless" computing refer to?', 'Running code without any servers involved', 'A model where the cloud provider manages the server infrastructure', 'Using physical servers located in your own office', 'A type of virtualization technology', 'B', 'Cloud'],
-            ['Which service is primarily used for object storage in AWS?', 'Amazon RDS', 'Amazon EBS', 'Amazon S3', 'Amazon Glacier', 'C', 'Cloud'],
-            ['In cloud computing, what is "auto-scaling"?', 'Manually adding more servers', 'Automatically adjusting computational resources in response to load', 'A security feature to prevent unauthorized access', 'A billing model that charges a flat rate', 'B', 'Cloud'],
-            ['What is the main benefit of a Content Delivery Network (CDN)?', 'Encrypting data at rest', 'Reducing latency by caching content closer to users', 'Providing relational database services', 'Automating software deployment', 'B', 'Cloud'],
+            ['Which of the following is an example of IaaS?', 'Google App Engine', 'Amazon EC2', 'Salesforce', 'Microsoft Office 365', 'B', 'Cloud', 'multiple_choice', null],
+            ['What does "serverless" computing refer to?', 'Running code without any servers involved', 'A model where the cloud provider manages the server infrastructure', 'Using physical servers located in your own office', 'A type of virtualization technology', 'B', 'Cloud', 'multiple_choice', null],
+            ['Which service is primarily used for object storage in AWS?', 'Amazon RDS', 'Amazon EBS', 'Amazon S3', 'Amazon Glacier', 'C', 'Cloud', 'multiple_choice', null],
+            ['In cloud computing, what is "auto-scaling"?', 'Manually adding more servers', 'Automatically adjusting computational resources in response to load', 'A security feature to prevent unauthorized access', 'A billing model that charges a flat rate', 'B', 'Cloud', 'multiple_choice', null],
+            ['What is the main benefit of a Content Delivery Network (CDN)?', 'Encrypting data at rest', 'Reducing latency by caching content closer to users', 'Providing relational database services', 'Automating software deployment', 'B', 'Cloud', 'multiple_choice', null],
         ];
-        const insertSql = 'INSERT INTO questions (question_text, option_a, option_b, option_c, option_d, correct_option, topic) VALUES (?, ?, ?, ?, ?, ?, ?)';
+
+        const insertSql = 'INSERT INTO questions (question_text, option_a, option_b, option_c, option_d, correct_option, topic, question_type, evaluation_criteria) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
         for (const q of seedQuestions) {
           await dbRun(db, insertSql, q);
         }

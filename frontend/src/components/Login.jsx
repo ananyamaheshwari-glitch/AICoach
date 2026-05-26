@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import api from '../api/axiosConfig';
 
 function Login({ setUser }) {
@@ -12,11 +12,30 @@ function Login({ setUser }) {
     e.preventDefault();
     setError('');
     try {
-      const response = await api.post('/auth/login', { username, password });
-      setUser(response.data.user);
+      console.log('Attempting login with:', { username });
+      const response = await fetch('http://localhost:3007/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ username, password })
+      });
+
+      console.log('Login response status:', response.status);
+      const data = await response.json();
+      console.log('Login response data:', data);
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Login failed');
+      }
+
+      setUser(data.user);
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.message || 'Login failed. Please try again.');
+      console.error('Login error:', err);
+      const errorMsg = err.message || 'Login failed. Please try again.';
+      setError(errorMsg);
     }
   };
 
@@ -55,6 +74,13 @@ function Login({ setUser }) {
             </button>
           </div>
         </form>
+
+        <p className="text-center text-sm text-gray-600">
+          Don't have an account?{' '}
+          <Link to="/register" className="text-indigo-600 hover:text-indigo-800 font-medium">
+            Create one here
+          </Link>
+        </p>
       </div>
     </div>
   );

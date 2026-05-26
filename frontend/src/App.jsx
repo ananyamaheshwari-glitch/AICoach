@@ -1,6 +1,7 @@
 import React from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import Login from './components/Login';
+import Register from './components/Register';
 import Dashboard from './components/Dashboard';
 import Quiz from './components/Quiz';
 import Results from './components/Results';
@@ -46,6 +47,7 @@ function App() {
       <main className="container mx-auto px-6 py-8">
         <Routes>
           <Route path="/login" element={!user ? <Login setUser={setUser} /> : <Navigate to="/dashboard" />} />
+          <Route path="/register" element={!user ? <Register setUser={setUser} /> : <Navigate to="/dashboard" />} />
           <Route path="/dashboard" element={user ? <Dashboard /> : <Navigate to="/login" />} />
           <Route path="/quiz/:topic" element={user ? <Quiz /> : <Navigate to="/login" />} />
           <Route path="/results/:resultId" element={user ? <Results /> : <Navigate to="/login" />} />

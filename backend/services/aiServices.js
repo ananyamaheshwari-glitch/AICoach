@@ -58,104 +58,314 @@ function safeParseJson(jsonString) {
     }
 }
 
-// LLM Call 1: Comprehensive initial evaluation
-exports.evaluateAnswers = async (questions, userAnswers) => {
-  // --- Start of added logic ---
-  let correctCount = 0;
-  const strengths = new Set();
-  const weak_areas = new Set();
+// Calculate confidence from OBSERVABLE DATA, not LLM guessing
+// This counts how many wrong answers actually match the error pattern
+function calculatePatternConfidence(detailedAnalysis, errorPattern) {
+  // Get all wrong answers
+  const wrongAnswers = detailedAnalysis.filter(qa => !qa.isCorrect);
 
-  const questionMap = new Map(questions.map(q => [q.id.toString(), q]));
-
-  for (const questionId in userAnswers) {
-    const question = questionMap.get(questionId);
-    if (question) {
-      if (userAnswers[questionId] === question.correct_option) {
-        correctCount++;
-        strengths.add(question.topic);
-      } else {
-        weak_areas.add(question.topic);
-      }
-    }
+  // If no wrong answers, confidence is perfect (nothing to be wrong about)
+  if (wrongAnswers.length === 0) {
+    return 1.0;
   }
 
-  const score = Math.round((correctCount / questions.length) * 100);
-  // --- End of added logic ---
+  // Special case: "Insufficient data" pattern
+  if (errorPattern === 'Insufficient data - mixed misconceptions or random errors' ||
+      errorPattern === 'None' ||
+      !errorPattern) {
+    return 0.0;
+  }
 
-  const systemPrompt = `You are an expert quiz evaluation system. Based on the user's quiz data, respond ONLY with a single, minified JSON object with the following keys:
-    - "score": ${score} (Use this pre-calculated value).
-    - "strengths": ${JSON.stringify(Array.from(strengths))} (Use this pre-calculated array).
-    - "weak_areas": ${JSON.stringify(Array.from(weak_areas))} (Use this pre-calculated array).
-    - "error_pattern": A brief string describing any recurring pattern of mistakes (e.g., "Confuses IaaS with PaaS", "Struggles with networking concepts", or "None").
-    - "key_insight": A single, concise sentence summarizing the user's performance.`;
+  // Count how many wrong answers show the SAME USER ANSWER
+  // This detects if they picked the same wrong option multiple times (clear misconception)
+  const answerFrequency = {};
+  wrongAnswers.forEach(qa => {
+    const answer = qa.userAnswer;
+    answerFrequency[answer] = (answerFrequency[answer] || 0) + 1;
+  });
+
+  // Find the most common wrong answer
+  const mostCommonAnswer = Object.entries(answerFrequency)
+    .sort((a, b) => b[1] - a[1])[0];
+
+  if (!mostCommonAnswer) {
+    return 0.0;
+  }
+
+  // Confidence = how many wrong answers picked the most common wrong option
+  const matchingAnswers = mostCommonAnswer[1];
+  const confidence = matchingAnswers / wrongAnswers.length;
+
+  return Math.min(1.0, Math.max(0.0, confidence)); // Clamp 0-1
+}
+
+// Validate error pattern using DATA-DRIVEN confidence
+function validateErrorPattern(evaluation, detailedAnalysis) {
+  // Calculate REAL confidence from observable data
+  const realConfidence = calculatePatternConfidence(
+    detailedAnalysis,
+    evaluation.error_pattern
+  );
+
+  console.log(`Pattern confidence: ${evaluation.error_pattern}`);
+  console.log(`  Claimed (LLM): ${evaluation.error_pattern_confidence || 0}`);
+  console.log(`  Actual (data): ${realConfidence}`);
+
+  // If real confidence is below threshold, mark as unreliable
+  if (realConfidence < 0.5) {
+    console.warn(`Low data-driven confidence (${realConfidence}). Using safe fallback.`);
+    return {
+      ...evaluation,
+      error_pattern: 'Insufficient data - mixed misconceptions or random errors',
+      error_pattern_confidence: 0,
+      should_caution_in_feedback: true
+    };
+  }
+
+  // Use the REAL confidence, not the LLM-guessed one
+  return {
+    ...evaluation,
+    error_pattern_confidence: realConfidence,  // Override with real data
+    should_caution_in_feedback: false
+  };
+}
+
+// LLM Call 1: Comprehensive initial evaluation
+exports.evaluateAnswers = async (questions, userAnswers) => {
+  let correctCount = 0;
+  const questionMap = new Map(questions.map(q => [q.id.toString(), q]));
+
+  // Build detailed analysis with explanation context
+  const detailedAnalysis = questions.map(q => {
+    const userAnswer = userAnswers[q.id];
+    const isCorrect = userAnswer === q.correct_option;
+    if (isCorrect) correctCount++;
+
+    // Generate explanation context for LLM to make informed analysis
+    const wrongAnswerLabel = userAnswer && userAnswer !== q.correct_option
+      ? userAnswer
+      : null;
+
+    return {
+      id: q.id,
+      question: q.question_text,
+      topic: q.topic,
+      userAnswer: userAnswer,
+      correctAnswer: q.correct_option,
+      isCorrect: isCorrect,
+      correctAnswerText: q[`option_${q.correct_option.toLowerCase()}`],
+      userAnswerText: userAnswer ? q[`option_${userAnswer.toLowerCase()}`] : 'No answer',
+      allOptions: {
+        A: q.option_a,
+        B: q.option_b,
+        C: q.option_c,
+        D: q.option_d
+      },
+      wrongAnswerExplanationNeeded: !isCorrect // Flag for LLM to explain difference
+    };
+  });
+
+  const score = Math.round((correctCount / questions.length) * 100);
+
+  // Identify which topics they got right vs wrong
+  const topicPerformance = {};
+  detailedAnalysis.forEach(qa => {
+    if (!topicPerformance[qa.topic]) {
+      topicPerformance[qa.topic] = { correct: 0, total: 0 };
+    }
+    topicPerformance[qa.topic].total++;
+    if (qa.isCorrect) topicPerformance[qa.topic].correct++;
+  });
+
+  const systemPrompt = `You are an expert education analyst. Analyze the student's quiz performance and identify patterns.
+
+IMPORTANT RULES:
+- Return ONLY valid JSON (no markdown, explanations, or extra text)
+- Base analysis ONLY on actual question performance shown
+- error_pattern: If you see a clear pattern in WRONG answers, describe it. If pattern is unclear, say "Insufficient data - mixed question types"
+  * Look at which wrong answers they picked
+  * Do they pick the same wrong option multiple times? → Misconception
+  * Do they pick different wrong options randomly? → Guess
+- key_insight: Summarize their performance based ONLY on score and actual results
+- strengths: Topics where they answered >= 75% correctly
+- weak_areas: Topics where they answered <= 50% correctly
+
+NOTE: Do NOT provide error_pattern_confidence. Confidence will be calculated from observable data.
+
+Return JSON with keys: score, strengths, weak_areas, error_pattern, key_insight, topic_breakdown`;
 
   const userPrompt = `
-    Here is the quiz data:
-    - Questions & Answers: ${JSON.stringify(questions.map(q => ({ id: q.id, question: q.question_text, topic: q.topic, correct_option: q.correct_option, user_answer: userAnswers[q.id] })), null, 2)}
-    - User's Submitted Answers: ${JSON.stringify(userAnswers)}
-    - Pre-calculated Score: ${score}%
-  `;
+STUDENT QUIZ PERFORMANCE ANALYSIS
+
+Score: ${score}% (${correctCount}/${questions.length} correct)
+
+DETAILED ANSWER BREAKDOWN:
+${JSON.stringify(detailedAnalysis, null, 2)}
+
+TOPIC PERFORMANCE SUMMARY:
+${JSON.stringify(topicPerformance, null, 2)}
+
+ANALYSIS TASK:
+Analyze the answer breakdown. Look at the userAnswer field.
+
+1. Do they pick the SAME wrong option multiple times?
+   → If YES: Describe what misconception (they're confusing X with Y)
+   → If NO: Say "Insufficient data - mixed misconceptions or random errors"
+
+2. Provide key_insight about their overall performance
+
+3. Identify strengths (topics 75%+) and weak_areas (topics 50%-)
+
+IMPORTANT: Do NOT rate your own confidence. Just describe the pattern you see.
+Confidence will be calculated from how many wrong answers match the pattern.`;
+
 
   const messages = [
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt }
   ];
   const responseText = await callAI(messages, { type: 'json_object' });
-  return safeParseJson(responseText);
+  const evaluation = safeParseJson(responseText);
+
+  // Ensure strengths and weak_areas are always populated
+  const strengthsList = Object.entries(topicPerformance)
+    .filter(([topic, perf]) => (perf.correct / perf.total) >= 0.75)
+    .map(([topic, perf]) => `${topic} (score ${Math.round((perf.correct / perf.total) * 100)}%)`)
+    .filter(Boolean);
+
+  const weakList = Object.entries(topicPerformance)
+    .filter(([topic, perf]) => (perf.correct / perf.total) <= 0.50)
+    .map(([topic, perf]) => `${topic} (score ${Math.round((perf.correct / perf.total) * 100)}%)`)
+    .filter(Boolean);
+
+  evaluation.strengths = (evaluation.strengths && evaluation.strengths.length > 0)
+    ? evaluation.strengths
+    : strengthsList;
+
+  evaluation.weak_areas = (evaluation.weak_areas && evaluation.weak_areas.length > 0)
+    ? evaluation.weak_areas
+    : weakList;
+
+  console.log('Final strengths:', evaluation.strengths);
+  console.log('Final weak_areas:', evaluation.weak_areas);
+
+  // Validate error pattern to avoid hallucinations
+  const validatedEvaluation = validateErrorPattern(evaluation, detailedAnalysis);
+
+  return validatedEvaluation;
 };
 
 // LLM Call 2A: Beginner-friendly explanation for low scores
-async function getBeginnerExplanation(weakAreas) {
-  const systemPrompt = `You are a friendly tutor. Explain the core concepts for the topics the user provides in a simple, clear, and encouraging way. Use Markdown for formatting.`;
-  const userPrompt = `I'm struggling with these topics: ${JSON.stringify(weakAreas)}. Can you explain them?`;
+async function getBeginnerExplanation(weakAreas, errorPattern, questions, userAnswers) {
+  const systemPrompt = `You are a supportive tutor helping a struggling student understand core concepts.
+
+IMPORTANT:
+- Write in simple, clear language with examples
+- Address the SPECIFIC misconceptions they showed
+- Explain WHY the correct answer is right
+- Use real-world analogies
+- Be encouraging about their effort
+- NO markdown formatting (just plain text with line breaks)`;
+
+  const userPrompt = `
+A student scored poorly on these topics: ${JSON.stringify(weakAreas)}
+
+Their specific error pattern: ${errorPattern}
+
+NOTE: If the error pattern says "Insufficient data", explain the fundamentals without assuming a specific misconception.
+
+Help them understand these concepts simply. Explain what they misunderstood and why.`;
+
   const messages = [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }];
   return callAI(messages);
 }
 
 // LLM Call 2B: Advanced feedback for high scores
-async function getAdvancedFeedback(strengths) {
-  const systemPrompt = `You are a senior architect. For the topics the user provides, provide advanced insights. Discuss real-world trade-offs, best practices, or deeper architectural implications. Go beyond the basic definitions. Use Markdown for formatting.`;
-  const userPrompt = `I did well on these topics: ${JSON.stringify(strengths)}. Can you give me some advanced feedback?`;
+async function getAdvancedFeedback(strengths, score, topicBreakdown) {
+  const systemPrompt = `You are a senior architect/expert educator.
+
+IMPORTANT:
+- Reference their ACTUAL strengths shown in quiz answers
+- Provide next-level insights beyond basics
+- Suggest real-world applications of what they know
+- Discuss architectural trade-offs relevant to their strong areas
+- NO markdown formatting (just plain text with line breaks)`;
+
+  const userPrompt = `
+A student scored ${score}% and showed strength in: ${JSON.stringify(strengths)}
+
+Topic breakdown: ${JSON.stringify(topicBreakdown)}
+
+Give them advanced insights to deepen their expertise in these areas. What should they study next?`;
+
   const messages = [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }];
   return callAI(messages);
 }
 
-exports.getDetailedFeedback = async (score, initialEvaluation) => {
+exports.getDetailedFeedback = async (score, initialEvaluation, questions, userAnswers) => {
     const scoreThreshold = 50;
     if (score < scoreThreshold) {
       if (initialEvaluation.weak_areas && initialEvaluation.weak_areas.length > 0) {
-        return getBeginnerExplanation(initialEvaluation.weak_areas);
+        return getBeginnerExplanation(
+          initialEvaluation.weak_areas,
+          initialEvaluation.error_pattern,
+          questions,
+          userAnswers
+        );
       }
-      // Fallback AI call for low scores with no specific weak areas
-      const systemPrompt = `You are a friendly and encouraging tutor. A user scored ${score}% on a quiz but no specific weak areas were identified. Write a brief, encouraging message (2-3 sentences) suggesting they review the general topic to solidify their understanding. Use Markdown for formatting.`;
+      const systemPrompt = `You are a supportive tutor. A student scored ${score}% but we haven't identified specific weak areas yet. Write an encouraging message suggesting they review fundamentals. NO markdown - just plain text.`;
       return callAI([{ role: 'system', content: systemPrompt }]);
     } else {
       if (initialEvaluation.strengths && initialEvaluation.strengths.length > 0) {
-        return getAdvancedFeedback(initialEvaluation.strengths);
+        return getAdvancedFeedback(
+          initialEvaluation.strengths,
+          score,
+          initialEvaluation.topic_breakdown
+        );
       }
-      // Fallback AI call for high scores with no specific strengths
-      const systemPrompt = `You are a senior architect. A user scored ${score}% on a quiz, showing good overall knowledge, but no specific standout strengths were identified. Write a brief, positive message (2-3 sentences) congratulating them on their solid performance and encouraging continued learning. Use Markdown for formatting.`;
+      const systemPrompt = `You are a senior architect. A student scored ${score}% showing solid knowledge. Congratulate them and suggest advanced next steps. NO markdown - just plain text.`;
       return callAI([{ role: 'system', content: systemPrompt }]);
     }
 };
 
 // LLM Call 3: Final report and roadmap generation
 exports.generateFinalReport = async (initialEvaluation, detailedFeedback) => {
-  const systemPrompt = `You are an AI career coach. Based on the performance analysis and detailed feedback provided by the user, create a final report.
-    Respond ONLY with a single, minified JSON object with the following keys:
-    - "overall_summary": A concise, one-paragraph summary of the user's performance, incorporating the 'key_insight'.
-    - "detailed_breakdown": The full detailed feedback text you were provided.
-    - "personalized_roadmap": An array of 3-4 specific, actionable string suggestions for what the user should study or practice next, based on their 'weak_areas' or 'strengths'.`;
+  const systemPrompt = `You are a learning architect. Create a personalized learning roadmap based on ACTUAL performance data.
+
+CRITICAL RULES:
+- overall_summary: 1-2 sentences using ONLY key_insight and score, no generic statements
+- detailed_breakdown: Include the detailed_feedback provided
+- personalized_roadmap: Generate 4-5 SPECIFIC, ACTIONABLE next steps using topic_breakdown
+  * For weak topics (score < 50%): Suggest fundamental drills, practice problems
+  * For strong topics (score >= 75%): Suggest advanced patterns, real-world applications
+  * Reference actual topic names and scores
+  * Be concrete ("Complete 5 IaaS/PaaS practice problems" not "Study cloud")
+  * Include confidence level if error_pattern_confidence is low
+
+Return ONLY valid JSON with keys: overall_summary, detailed_breakdown, personalized_roadmap`;
 
   const userPrompt = `
-    Please generate the final report based on this data:
+CREATE PERSONALIZED LEARNING ROADMAP - USE TOPIC BREAKDOWN
 
-    **Performance Analysis:**
-    ${JSON.stringify(initialEvaluation, null, 2)}
+Performance Analysis:
+${JSON.stringify(initialEvaluation, null, 2)}
 
-    **Detailed Feedback:**
-    ${detailedFeedback}
-  `;
+Detailed Feedback:
+${detailedFeedback}
+
+EXPLICIT TOPIC-BASED ROADMAP INSTRUCTIONS:
+Use the topic_breakdown provided above. For each topic:
+- If they scored < 50%: Add fundamental practice step
+- If they scored 50-74%: Add reinforcement step
+- If they scored >= 75%: Add advanced/application step
+
+Example format:
+- "Cloud (score 60%): Complete 5 practice problems on [specific weak concept]"
+- "Security (score 90%): Explore advanced patterns in [their strong area]"
+
+Create 4-5 steps total based on ACTUAL topic performance shown in topic_breakdown above.`;
+
+
   const messages = [
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt }

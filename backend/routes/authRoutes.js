@@ -6,12 +6,12 @@ const router = express.Router();
 
 const registerValidation = [
   body('username').isLength({ min: 3, max: 50 }).trim().escape(),
-  body('password').isLength({ min: 8, max: 128 })
+  body('password').isLength({ min: 6, max: 128 })
 ];
 
 const loginValidation = [
   body('username').isLength({ min: 3, max: 50 }).trim().escape(),
-  body('password').isLength({ min: 8, max: 128 })
+  body('password').isLength({ min: 6, max: 128 })
 ];
 
 const loginLimiter = rateLimit({
