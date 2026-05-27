@@ -86,13 +86,18 @@ const initializeDB = async () => {
     if (rows[0].count === 0) {
         console.log('Seeding database with questions...');
 
-        // Multiple choice questions
+        // Google Cloud Platform Quiz (10 questions)
         const seedQuestions = [
-            ['Which of the following is an example of IaaS?', 'Google App Engine', 'Amazon EC2', 'Salesforce', 'Microsoft Office 365', 'B', 'Cloud', 'multiple_choice', null],
-            ['What does "serverless" computing refer to?', 'Running code without any servers involved', 'A model where the cloud provider manages the server infrastructure', 'Using physical servers located in your own office', 'A type of virtualization technology', 'B', 'Cloud', 'multiple_choice', null],
-            ['Which service is primarily used for object storage in AWS?', 'Amazon RDS', 'Amazon EBS', 'Amazon S3', 'Amazon Glacier', 'C', 'Cloud', 'multiple_choice', null],
-            ['In cloud computing, what is "auto-scaling"?', 'Manually adding more servers', 'Automatically adjusting computational resources in response to load', 'A security feature to prevent unauthorized access', 'A billing model that charges a flat rate', 'B', 'Cloud', 'multiple_choice', null],
-            ['What is the main benefit of a Content Delivery Network (CDN)?', 'Encrypting data at rest', 'Reducing latency by caching content closer to users', 'Providing relational database services', 'Automating software deployment', 'B', 'Cloud', 'multiple_choice', null],
+            ['Which Google Cloud service is used for managed relational databases?', 'Cloud Storage', 'Cloud SQL', 'Cloud Datastore', 'Cloud Spanner', 'B', 'Google Cloud Platform', 'multiple_choice', null],
+            ['What is the primary purpose of Google Cloud Pub/Sub?', 'Object storage in the cloud', 'Real-time messaging and event ingestion', 'Managing virtual machine instances', 'Monitoring and logging applications', 'B', 'Google Cloud Platform', 'multiple_choice', null],
+            ['Which Google Cloud service allows you to run serverless functions?', 'Compute Engine', 'App Engine', 'Cloud Functions', 'Cloud Run', 'C', 'Google Cloud Platform', 'multiple_choice', null],
+            ['What does GCP stand for?', 'Google Cloud Provider', 'Google Compute Platform', 'Google Cloud Platform', 'Global Cloud Provider', 'C', 'Google Cloud Platform', 'multiple_choice', null],
+            ['Which service in Google Cloud is used for distributed data processing and analytics?', 'Cloud Firestore', 'BigQuery', 'Cloud Dataflow', 'All of the above', 'D', 'Google Cloud Platform', 'multiple_choice', null],
+            ['Which Google Cloud service provides NoSQL document storage?', 'Cloud SQL', 'Cloud Datastore', 'Cloud Firestore', 'Cloud Spanner', 'C', 'Google Cloud Platform', 'multiple_choice', null],
+            ['What is Google Cloud Storage primarily used for?', 'Running virtual machines', 'Storing and retrieving objects at scale', 'Managing relational databases', 'Processing streaming data', 'B', 'Google Cloud Platform', 'multiple_choice', null],
+            ['Which GCP service is used for deploying and managing containerized applications?', 'Compute Engine', 'App Engine', 'Google Kubernetes Engine', 'Cloud Functions', 'C', 'Google Cloud Platform', 'multiple_choice', null],
+            ['What is the purpose of Google Cloud Identity and Access Management (IAM)?', 'Storing encrypted secrets', 'Managing user access and permissions', 'Monitoring application performance', 'Backing up data', 'B', 'Google Cloud Platform', 'multiple_choice', null],
+            ['Which GCP service is used for building and managing machine learning models?', 'Vertex AI', 'BigQuery ML', 'Cloud AutoML', 'All of the above', 'D', 'Google Cloud Platform', 'multiple_choice', null],
         ];
 
         const insertSql = 'INSERT INTO questions (question_text, option_a, option_b, option_c, option_d, correct_option, topic, question_type, evaluation_criteria) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';

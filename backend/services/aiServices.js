@@ -2,6 +2,7 @@
 const { OpenAI } = require("openai");
 const path = require('path');
 const config = require(path.join(__dirname, '..', 'config.js'));
+const aiSafetyValidator = require('./aiSafetyValidator');
 
 const openai = new OpenAI({
   apiKey: config.huggingface.token,
@@ -225,6 +226,14 @@ Confidence will be calculated from how many wrong answers match the pattern.`;
     { role: 'user', content: userPrompt }
   ];
   const responseText = await callAI(messages, { type: 'json_object' });
+
+  // Safety: Validate LLM output before parsing
+  const safetyCheck = aiSafetyValidator.validateLLMOutput(responseText, 'json');
+  if (!safetyCheck.safe) {
+    console.warn(`🚨 SAFETY VIOLATION in evaluation output: ${safetyCheck.failureReasons.join(', ')}`);
+    return aiSafetyValidator.getFallbackEvaluation(score);
+  }
+
   const evaluation = safeParseJson(responseText);
 
   // Ensure strengths and weak_areas are always populated
@@ -256,7 +265,7 @@ Confidence will be calculated from how many wrong answers match the pattern.`;
 };
 
 // LLM Call 2A: Beginner-friendly explanation for low scores
-async function getBeginnerExplanation(weakAreas, errorPattern, questions, userAnswers) {
+async function getBeginnerExplanation(weakAreas, errorPattern, questions, userAnswers, score) {
   const systemPrompt = `You are a supportive tutor helping a struggling student understand core concepts.
 
 IMPORTANT:
@@ -277,7 +286,16 @@ NOTE: If the error pattern says "Insufficient data", explain the fundamentals wi
 Help them understand these concepts simply. Explain what they misunderstood and why.`;
 
   const messages = [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }];
-  return callAI(messages);
+  const feedback = await callAI(messages);
+
+  // Safety: Validate feedback output
+  const safetyCheck = aiSafetyValidator.validateLLMOutput(feedback, 'text');
+  if (!safetyCheck.safe) {
+    console.warn(`🚨 SAFETY VIOLATION in feedback: ${safetyCheck.failureReasons.join(', ')}`);
+    return aiSafetyValidator.getFallbackFeedback(score);
+  }
+
+  return feedback;
 }
 
 // LLM Call 2B: Advanced feedback for high scores
@@ -299,7 +317,16 @@ Topic breakdown: ${JSON.stringify(topicBreakdown)}
 Give them advanced insights to deepen their expertise in these areas. What should they study next?`;
 
   const messages = [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }];
-  return callAI(messages);
+  const feedback = await callAI(messages);
+
+  // Safety: Validate feedback output
+  const safetyCheck = aiSafetyValidator.validateLLMOutput(feedback, 'text');
+  if (!safetyCheck.safe) {
+    console.warn(`🚨 SAFETY VIOLATION in feedback: ${safetyCheck.failureReasons.join(', ')}`);
+    return aiSafetyValidator.getFallbackFeedback(score);
+  }
+
+  return feedback;
 }
 
 exports.getDetailedFeedback = async (score, initialEvaluation, questions, userAnswers) => {
@@ -310,11 +337,21 @@ exports.getDetailedFeedback = async (score, initialEvaluation, questions, userAn
           initialEvaluation.weak_areas,
           initialEvaluation.error_pattern,
           questions,
-          userAnswers
+          userAnswers,
+          score
         );
       }
       const systemPrompt = `You are a supportive tutor. A student scored ${score}% but we haven't identified specific weak areas yet. Write an encouraging message suggesting they review fundamentals. NO markdown - just plain text.`;
-      return callAI([{ role: 'system', content: systemPrompt }]);
+      const feedback = await callAI([{ role: 'system', content: systemPrompt }]);
+
+      // Safety: Validate feedback output
+      const safetyCheck = aiSafetyValidator.validateLLMOutput(feedback, 'text');
+      if (!safetyCheck.safe) {
+        console.warn(`🚨 SAFETY VIOLATION in feedback: ${safetyCheck.failureReasons.join(', ')}`);
+        return aiSafetyValidator.getFallbackFeedback(score);
+      }
+
+      return feedback;
     } else {
       if (initialEvaluation.strengths && initialEvaluation.strengths.length > 0) {
         return getAdvancedFeedback(
@@ -324,7 +361,16 @@ exports.getDetailedFeedback = async (score, initialEvaluation, questions, userAn
         );
       }
       const systemPrompt = `You are a senior architect. A student scored ${score}% showing solid knowledge. Congratulate them and suggest advanced next steps. NO markdown - just plain text.`;
-      return callAI([{ role: 'system', content: systemPrompt }]);
+      const feedback = await callAI([{ role: 'system', content: systemPrompt }]);
+
+      // Safety: Validate feedback output
+      const safetyCheck = aiSafetyValidator.validateLLMOutput(feedback, 'text');
+      if (!safetyCheck.safe) {
+        console.warn(`🚨 SAFETY VIOLATION in feedback: ${safetyCheck.failureReasons.join(', ')}`);
+        return aiSafetyValidator.getFallbackFeedback(score);
+      }
+
+      return feedback;
     }
 };
 
@@ -371,5 +417,23 @@ Create 4-5 steps total based on ACTUAL topic performance shown in topic_breakdow
     { role: 'user', content: userPrompt }
   ];
   const responseText = await callAI(messages, { type: 'json_object' });
-  return safeParseJson(responseText);
+
+  // Safety: Validate LLM output before parsing
+  const safetyCheck = aiSafetyValidator.validateLLMOutput(responseText, 'json');
+  if (!safetyCheck.safe) {
+    console.warn(`🚨 SAFETY VIOLATION in final report: ${safetyCheck.failureReasons.join(', ')}`);
+    return {
+      overall_summary: `You scored ${initialEvaluation.score}%. Continue practicing to improve.`,
+      detailed_breakdown: detailedFeedback,
+      personalized_roadmap: aiSafetyValidator.getFallbackRoadmap(initialEvaluation.score)
+    };
+  }
+
+  const reportData = safeParseJson(responseText);
+
+  // Ensure detailed_breakdown always includes the feedback
+  return {
+    ...reportData,
+    detailed_breakdown: reportData.detailed_breakdown || detailedFeedback
+  };
 };

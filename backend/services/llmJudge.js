@@ -78,8 +78,10 @@ exports.generateReport = async (quizData) => {
     // Attach confidence metadata for frontend if needed
     return {
       ...finalReport,
+      topic: topic,
       strengths: initialEvaluation.strengths,
       weak_areas: initialEvaluation.weak_areas,
+      detailed_breakdown: finalReport.detailed_breakdown || detailedFeedback,
       personalized_roadmap: roadmapArray,
       _metadata: {
         error_pattern_confidence: initialEvaluation.error_pattern_confidence,
@@ -114,6 +116,7 @@ exports.generateReport = async (quizData) => {
 
     // Fallback if LLM call fails
     return {
+      topic: topic,
       overall_summary: 'Unable to generate detailed analysis at this time.',
       detailed_breakdown: 'Please try submitting the quiz again.',
       personalized_roadmap: ['Review the course material', 'Practice similar questions', 'Identify your knowledge gaps'],

@@ -36,21 +36,21 @@ exports.login = async (req, res) => {
   try {
     const users = await dbAll(db, 'SELECT * FROM users WHERE username = ?', [username]);
     if (users.length === 0) {
-      console.warn(`Login attempt for non-existent user: ${username} from ${req.ip}`);
+      console.warn(`Login attempt for non-existent user: ${username} `);
       return res.status(401).json({ message: 'Invalid credentials.' });
     }
     const user = users[0];
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      console.warn(`Failed login attempt for user: ${username} from ${req.ip}`);
+      console.warn(`Failed login attempt for user: ${username}`);
       return res.status(401).json({ message: 'Invalid credentials.' });
     }
 
     // Create a session for the user
     const sessionUser = { id: user.id, username: user.username };
     req.session.user = sessionUser;
-    console.log(`Successful login for user: ${username} from ${req.ip}`);
+    console.log(`Successful login for user: ${username}`);
 
     res.json({ message: 'Login successful.', user: sessionUser });
   } catch (error) {
