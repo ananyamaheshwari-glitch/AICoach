@@ -6,7 +6,8 @@ const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   session: {
     secret: process.env.SESSION_SECRET,
-    maxAge: 1000 * 60 * 60 * 24, // 24 hours
+    maxAge: 1000 * 60 * 60 * 24, // 24 hours (in milliseconds)
+    warningTime: 1000 * 60 * 15, // Warn user 15 minutes before expiration
   },
   cors: {
     origin: process.env.CORS_ORIGIN || 'http://localhost:5181',

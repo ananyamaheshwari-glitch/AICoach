@@ -11,13 +11,14 @@ function Results() {
   const [currentPage, setCurrentPage] = useState('questions');
 
   useEffect(() => {
-    // If the report wasn't passed via navigation state, fetch it.
+    // Only fetch if report wasn't passed via navigation state and we don't have one
     if (!report && resultId) {
       const fetchResult = async () => {
         try {
           const response = await api.get(`/quizzes/results/${resultId}`);
-          console.log('Fetched report:', response.data.report);
-          setReport(response.data.report);
+          // Backend returns {report: {...}}, so we extract the inner report object
+          const reportData = response.data.report || response.data;
+          setReport(reportData);
         } catch (err) {
           console.error('Error fetching report:', err);
           setError('Failed to fetch quiz results. They may not exist or you may not have permission to view them.');
@@ -27,17 +28,23 @@ function Results() {
       };
       fetchResult();
     } else if (report) {
-      console.log('Report from navigation state:', report);
+      // Report already available from navigation
+      setLoading(false);
     }
-  }, [report, resultId]);
+  }, [resultId]);
 
-  if (loading) return <div className="text-center">Loading results...</div>;
-  if (error) return <div className="text-center text-red-500">{error}</div>;
+  if (loading) {
+    return <div className="text-center p-8 text-gray-600">Loading results...</div>;
+  }
+
+  if (error) {
+    return <div className="text-center text-red-500 p-8">{error}</div>;
+  }
 
   if (!report) {
     return (
-      <div className="text-center">
-        <p>No results to display. Please complete a quiz first.</p>
+      <div className="text-center p-8 text-gray-600">
+        <p>No results to display.</p>
         <Link to="/dashboard" className="text-indigo-600 hover:underline">Go to Dashboard</Link>
       </div>
     );
@@ -166,27 +173,19 @@ function Results() {
 
   // Page 2: Feedback
   if (currentPage === 'feedback') {
-    console.log('Feedback Report:', report);
-    console.log('Report type:', typeof report);
-    console.log('Report keys:', report ? Object.keys(report) : 'null');
-
-    const quizTopic = report?.topic || report?.report?.topic || 'Cloud';
+    const reportData = report || {};
+    const quizTopic = reportData?.topic || 'Cloud';
     const relatedTopics = getRelatedQuizzes(quizTopic);
-
-    // Handle nested report structure if it exists
-    const reportData = report?.report || report;
     const overallSummary = reportData?.overall_summary;
 
-    if (!reportData || !overallSummary) {
+    // Only show error if we truly have no data
+    if (!overallSummary) {
       return (
         <div className="p-8 bg-white rounded-lg shadow-md max-w-4xl mx-auto">
           <h2 className="text-3xl font-bold text-gray-800 mb-6">Quiz Results - Feedback & Insights</h2>
           <div className="text-yellow-600 p-4 bg-yellow-50 rounded-lg mb-4">
-            <p>⚠️ Feedback is loading...</p>
-            <p className="text-sm mt-2">If this persists, try refreshing the page.</p>
-          </div>
-          <div className="text-gray-600 p-4 bg-gray-50 rounded-lg mb-4">
-            <p className="text-xs font-mono break-all">{JSON.stringify(reportData).substring(0, 300)}...</p>
+            <p>⚠️ Feedback data is not available</p>
+            <p className="text-sm mt-2">Please go back and try again.</p>
           </div>
           <div className="flex gap-4 mt-8">
             <button
@@ -195,12 +194,9 @@ function Results() {
             >
               ← Back to Questions
             </button>
-            <button
-              onClick={() => window.location.reload()}
-              className="flex-1 px-6 py-3 font-bold text-white bg-orange-600 rounded-md hover:bg-orange-700"
-            >
-              Refresh Page
-            </button>
+            <Link to="/dashboard" className="flex-1 px-6 py-3 text-center font-bold text-white bg-indigo-600 rounded-md hover:bg-indigo-700">
+              Back to Dashboard
+            </Link>
           </div>
         </div>
       );

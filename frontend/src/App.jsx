@@ -1,16 +1,40 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import Login from './components/Login';
 import Register from './components/Register';
 import Dashboard from './components/Dashboard';
 import Quiz from './components/Quiz';
 import Results from './components/Results';
+import SessionWarning from './components/SessionWarning';
 import useAuth from './hooks/useAuth';
+import useSessionTimeout from './hooks/useSessionTimeout';
 import api from './api/axiosConfig';
 
 function App() {
   const { user, loading, setUser } = useAuth();
   const navigate = useNavigate();
+  const [showSessionWarning, setShowSessionWarning] = useState(false);
+  const [warningRemainingTime, setWarningRemainingTime] = useState(null);
+
+  const handleSessionWarning = (remainingTime) => {
+    setWarningRemainingTime(remainingTime);
+    setShowSessionWarning(true);
+  };
+
+  const handleSessionExpired = () => {
+    setShowSessionWarning(false);
+    setUser(null);
+    navigate('/login', { state: { message: 'Your session has expired. Please login again.' } });
+  };
+
+  const handleExtendSession = () => {
+    setShowSessionWarning(false);
+  };
+
+  const { formatRemainingTime } = useSessionTimeout(
+    user ? handleSessionWarning : null,
+    user ? handleSessionExpired : null
+  );
 
   const handleLogout = async () => {
     try {
@@ -54,6 +78,13 @@ function App() {
           <Route path="*" element={<Navigate to={user ? "/dashboard" : "/login"} />} />
         </Routes>
       </main>
+      <SessionWarning
+        isVisible={showSessionWarning}
+        remainingTime={warningRemainingTime}
+        formatTime={formatRemainingTime}
+        onExtend={handleExtendSession}
+        onLogout={handleLogout}
+      />
     </div>
   );
 }

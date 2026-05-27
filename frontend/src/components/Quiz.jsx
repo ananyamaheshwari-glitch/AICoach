@@ -38,11 +38,6 @@ function Quiz() {
       return false;
     }
 
-    if (answeredCount < questions.length) {
-      setError(`You have answered ${answeredCount} out of ${questions.length} questions. Some questions are unanswered.`);
-      return false;
-    }
-
     return true;
   };
 
@@ -114,7 +109,8 @@ function Quiz() {
 
         {unansweredCount > 0 && (
           <div className="mb-8 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-            <h3 className="font-semibold text-yellow-800 mb-3">Unanswered Questions</h3>
+            <h3 className="font-semibold text-yellow-800 mb-3">⚠️ Unanswered Questions ({unansweredCount})</h3>
+            <p className="text-sm text-yellow-700 mb-3">You can submit the quiz with unanswered questions. They will be marked as incorrect.</p>
             <div className="space-y-2">
               {questions.map((q, index) => (
                 !answers[q.id] && (
