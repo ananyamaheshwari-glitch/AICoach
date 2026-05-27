@@ -299,7 +299,7 @@ function Results() {
             <h4 className="text-xl font-bold mb-2">Detailed Breakdown</h4>
             <div className="text-gray-700 mb-4 leading-relaxed whitespace-pre-wrap">
               {reportData.detailed_breakdown ? (
-                reportData.detailed_breakdown
+                String(reportData.detailed_breakdown)
                   .replace(/\*\*/g, '')
                   .replace(/#+\s+/g, '')
                   .replace(/^[\s]*[*+-]\s+/gm, '')
