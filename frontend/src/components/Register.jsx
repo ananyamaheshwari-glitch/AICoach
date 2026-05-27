@@ -7,6 +7,7 @@ function Register({ setUser }) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -58,6 +59,7 @@ function Register({ setUser }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
 
     if (!validateForm()) {
       return;
@@ -65,21 +67,46 @@ function Register({ setUser }) {
 
     setLoading(true);
     try {
-      const response = await api.post('/auth/register', {
+      // Step 1: Register the user
+      const registerResponse = await api.post('/auth/register', {
         username,
         password
       });
 
-      // Auto-login after successful registration
-      const loginResponse = await api.post('/auth/login', {
-        username,
-        password
-      });
+      console.log('Registration successful:', registerResponse.data);
 
-      setUser(loginResponse.data.user);
-      navigate('/dashboard');
+      // Step 2: Wait a moment for session to be established
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Step 3: Auto-login after successful registration
+      try {
+        const loginResponse = await api.post('/auth/login', {
+          username,
+          password
+        });
+
+        console.log('Auto-login successful:', loginResponse.data);
+        setUser(loginResponse.data.user);
+
+        // Wait a moment before navigating to ensure state is updated
+        await new Promise(resolve => setTimeout(resolve, 300));
+        navigate('/dashboard');
+      } catch (loginErr) {
+        console.warn('Auto-login failed, redirecting to login page:', loginErr);
+        // If auto-login fails, redirect to login page with success message
+        setSuccess('Account created successfully! Redirecting to login page...');
+        // Clear form
+        setUsername('');
+        setPassword('');
+        setConfirmPassword('');
+        // Navigate to login after showing message
+        setTimeout(() => {
+          navigate('/login');
+        }, 2000);
+      }
     } catch (err) {
       const errorMessage = err.response?.data?.message || 'Registration failed. Please try again.';
+      console.error('Registration error:', errorMessage);
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -179,7 +206,17 @@ function Register({ setUser }) {
             />
           </div>
 
-          {error && <p className="text-sm text-red-600 bg-red-50 p-3 rounded">{error}</p>}
+          {error && (
+            <p className="text-sm text-red-600 bg-red-50 p-3 rounded border border-red-200">
+              {error}
+            </p>
+          )}
+
+          {success && (
+            <p className="text-sm text-green-600 bg-green-50 p-3 rounded border border-green-200">
+              ✓ {success}
+            </p>
+          )}
 
           <div>
             <button
