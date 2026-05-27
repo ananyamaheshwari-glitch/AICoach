@@ -67,7 +67,7 @@ function Register({ setUser }) {
 
     setLoading(true);
     try {
-      // Step 1: Register the user
+      // Register the user
       const registerResponse = await api.post('/auth/register', {
         username,
         password
@@ -75,35 +75,18 @@ function Register({ setUser }) {
 
       console.log('Registration successful:', registerResponse.data);
 
-      // Step 2: Wait a moment for session to be established
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Show success message
+      setSuccess('✓ Account created successfully! Redirecting to login page...');
 
-      // Step 3: Auto-login after successful registration
-      try {
-        const loginResponse = await api.post('/auth/login', {
-          username,
-          password
-        });
+      // Clear form
+      setUsername('');
+      setPassword('');
+      setConfirmPassword('');
 
-        console.log('Auto-login successful:', loginResponse.data);
-        setUser(loginResponse.data.user);
-
-        // Wait a moment before navigating to ensure state is updated
-        await new Promise(resolve => setTimeout(resolve, 300));
-        navigate('/dashboard');
-      } catch (loginErr) {
-        console.warn('Auto-login failed, redirecting to login page:', loginErr);
-        // If auto-login fails, redirect to login page with success message
-        setSuccess('Account created successfully! Redirecting to login page...');
-        // Clear form
-        setUsername('');
-        setPassword('');
-        setConfirmPassword('');
-        // Navigate to login after showing message
-        setTimeout(() => {
-          navigate('/login');
-        }, 2000);
-      }
+      // Redirect to login page after showing message for 2 seconds
+      setTimeout(() => {
+        navigate('/login', { state: { registeredUsername: username } });
+      }, 2000);
     } catch (err) {
       const errorMessage = err.response?.data?.message || 'Registration failed. Please try again.';
       console.error('Registration error:', errorMessage);
