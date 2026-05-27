@@ -11,27 +11,30 @@ function Results() {
   const [currentPage, setCurrentPage] = useState('questions');
 
   useEffect(() => {
-    // Only fetch if report wasn't passed via navigation state and we don't have one
-    if (!report && resultId) {
+    // If report is passed via navigation state, mark as not loading
+    if (report) {
+      setLoading(false);
+      return;
+    }
+
+    // If we have resultId but no report, fetch it
+    if (resultId) {
+      setLoading(true);
       const fetchResult = async () => {
         try {
           const response = await api.get(`/quizzes/results/${resultId}`);
-          // Backend returns {report: {...}}, so we extract the inner report object
           const reportData = response.data.report || response.data;
           setReport(reportData);
+          setLoading(false);
         } catch (err) {
           console.error('Error fetching report:', err);
-          setError('Failed to fetch quiz results. They may not exist or you may not have permission to view them.');
-        } finally {
+          setError('Failed to fetch quiz results.');
           setLoading(false);
         }
       };
       fetchResult();
-    } else if (report) {
-      // Report already available from navigation
-      setLoading(false);
     }
-  }, [resultId]);
+  }, [resultId, report]);
 
   if (loading) {
     return <div className="text-center p-8 text-gray-600">Loading results...</div>;
