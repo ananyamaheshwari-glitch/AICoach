@@ -35,14 +35,26 @@ exports.submitQuiz = async (req, res) => {
   const { validationResult } = require("express-validator");
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
+    return res.status(400).json({ message: "Validation failed", errors: errors.array() });
   }
 
-  const { user_answers } = req.body; // e.g., {"1": "A", "2": "C"}
+  const { user_answers } = req.body; // e.g., {"21": "A", "22": "C"}
   const userId = req.user.id; // Get user ID securely from the session via authMiddleware
 
-  if (!user_answers || Object.keys(user_answers).length === 0) {
+  // Validate user_answers structure
+  if (!user_answers || typeof user_answers !== 'object' || Object.keys(user_answers).length === 0) {
     return res.status(400).json({ message: "No answers provided." });
+  }
+
+  // Validate all answer values are valid options
+  const validOptions = ['A', 'B', 'C', 'D'];
+  for (const [questionId, answer] of Object.entries(user_answers)) {
+    if (!validOptions.includes(answer)) {
+      return res.status(400).json({ message: `Invalid answer for question ${questionId}. Must be A, B, C, or D.` });
+    }
+    if (isNaN(questionId) || parseInt(questionId) <= 0) {
+      return res.status(400).json({ message: `Invalid question ID: ${questionId}` });
+    }
   }
 
   try {
@@ -171,11 +183,17 @@ exports.getResultById = async (req, res) => {
   const { resultId } = req.params;
   const userId = req.user.id; // Get user ID from session
 
+  // Validate resultId is a positive integer
+  const id = parseInt(resultId);
+  if (isNaN(id) || id <= 0) {
+    return res.status(400).json({ message: "Invalid result ID format." });
+  }
+
   try {
     const results = await dbAll(
       db,
       "SELECT * FROM quiz_results WHERE id = ? AND user_id = ?",
-      [resultId, userId],
+      [id, userId],
     );
 
     if (results.length === 0) {
@@ -187,7 +205,21 @@ exports.getResultById = async (req, res) => {
     }
 
     const result = results[0];
-    res.json({ report: JSON.parse(result.final_report) });
+
+    // Validate that final_report is valid JSON
+    let report;
+    try {
+      report = JSON.parse(result.final_report);
+    } catch (parseError) {
+      return res.status(500).json({ message: "Failed to parse quiz report." });
+    }
+
+    // Validate required fields in report
+    if (!report.overall_summary || report.score === undefined) {
+      return res.status(500).json({ message: "Incomplete quiz report data." });
+    }
+
+    res.json({ report });
   } catch (error) {
     handleServerError(res, error, "Server error fetching result.");
   }

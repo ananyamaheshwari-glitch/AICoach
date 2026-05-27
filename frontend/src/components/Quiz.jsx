@@ -30,13 +30,30 @@ function Quiz() {
     setAnswers({ ...answers, [questionId]: option });
   };
 
+  const validateAnswers = () => {
+    const answeredCount = Object.keys(answers).length;
+
+    if (answeredCount === 0) {
+      setError('Please answer at least one question before submitting.');
+      return false;
+    }
+
+    if (answeredCount < questions.length) {
+      setError(`You have answered ${answeredCount} out of ${questions.length} questions. Some questions are unanswered.`);
+      return false;
+    }
+
+    return true;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (Object.keys(answers).length === 0) {
-      setError('Please answer at least one question before submitting.');
+    setError('');
+
+    if (!validateAnswers()) {
       return;
     }
-    setError('');
+
     setShowReview(true);
   };
 

@@ -8,9 +8,52 @@ function Login({ setUser }) {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
+  const checkPasswordStrength = (pwd) => {
+    return {
+      hasUpperCase: /[A-Z]/.test(pwd),
+      hasLowerCase: /[a-z]/.test(pwd),
+      hasNumber: /[0-9]/.test(pwd),
+      minLength: pwd.length >= 6
+    };
+  };
+
+  const isPasswordStrong = (pwd) => {
+    const strength = checkPasswordStrength(pwd);
+    return strength.hasUpperCase && strength.hasLowerCase && strength.hasNumber && strength.minLength;
+  };
+
+  const validateForm = () => {
+    if (!username.trim()) {
+      setError('Username is required.');
+      return false;
+    }
+
+    if (username.length < 3) {
+      setError('Username must be at least 3 characters long.');
+      return false;
+    }
+
+    if (!password) {
+      setError('Password is required.');
+      return false;
+    }
+
+    if (!isPasswordStrong(password)) {
+      setError('Password must contain at least one uppercase letter, one lowercase letter, one number, and be at least 6 characters long.');
+      return false;
+    }
+
+    return true;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    if (!validateForm()) {
+      return;
+    }
+
     try {
       console.log('Attempting login with:', { username });
       const response = await fetch('http://localhost:3007/api/auth/login', {

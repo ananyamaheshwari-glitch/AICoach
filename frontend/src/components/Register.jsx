@@ -10,6 +10,20 @@ function Register({ setUser }) {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  const checkPasswordStrength = (pwd) => {
+    return {
+      hasUpperCase: /[A-Z]/.test(pwd),
+      hasLowerCase: /[a-z]/.test(pwd),
+      hasNumber: /[0-9]/.test(pwd),
+      minLength: pwd.length >= 6
+    };
+  };
+
+  const isPasswordStrong = (pwd) => {
+    const strength = checkPasswordStrength(pwd);
+    return strength.hasUpperCase && strength.hasLowerCase && strength.hasNumber && strength.minLength;
+  };
+
   const validateForm = () => {
     if (!username.trim()) {
       setError('Username is required.');
@@ -26,8 +40,8 @@ function Register({ setUser }) {
       return false;
     }
 
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters long.');
+    if (!isPasswordStrong(password)) {
+      setError('Password must contain at least one uppercase letter, one lowercase letter, one number, and be at least 6 characters long.');
       return false;
     }
 
@@ -38,6 +52,8 @@ function Register({ setUser }) {
 
     return true;
   };
+
+  const passwordStrength = checkPasswordStrength(password);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -97,9 +113,58 @@ function Register({ setUser }) {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter password"
               required
-              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              className={`w-full px-3 py-2 mt-1 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 ${
+                password && isPasswordStrong(password)
+                  ? 'border-green-400'
+                  : password
+                  ? 'border-red-400'
+                  : 'border-gray-300'
+              }`}
             />
-            <p className="mt-1 text-xs text-gray-500">At least 6 characters</p>
+
+            {/* Password Requirements Checklist */}
+            {password && (
+              <div className="mt-3 p-3 bg-gray-50 rounded-md border border-gray-200">
+                <p className="text-xs font-semibold text-gray-700 mb-2">Password must contain:</p>
+                <div className="space-y-1">
+                  <div className="flex items-center text-xs">
+                    <span className={`mr-2 ${passwordStrength.hasUpperCase ? 'text-green-600 font-bold' : 'text-gray-400'}`}>
+                      {passwordStrength.hasUpperCase ? '✓' : '○'}
+                    </span>
+                    <span className={passwordStrength.hasUpperCase ? 'text-green-700 font-medium' : 'text-gray-600'}>
+                      At least one uppercase letter (A-Z)
+                    </span>
+                  </div>
+
+                  <div className="flex items-center text-xs">
+                    <span className={`mr-2 ${passwordStrength.hasLowerCase ? 'text-green-600 font-bold' : 'text-gray-400'}`}>
+                      {passwordStrength.hasLowerCase ? '✓' : '○'}
+                    </span>
+                    <span className={passwordStrength.hasLowerCase ? 'text-green-700 font-medium' : 'text-gray-600'}>
+                      At least one lowercase letter (a-z)
+                    </span>
+                  </div>
+
+                  <div className="flex items-center text-xs">
+                    <span className={`mr-2 ${passwordStrength.hasNumber ? 'text-green-600 font-bold' : 'text-gray-400'}`}>
+                      {passwordStrength.hasNumber ? '✓' : '○'}
+                    </span>
+                    <span className={passwordStrength.hasNumber ? 'text-green-700 font-medium' : 'text-gray-600'}>
+                      At least one number (0-9)
+                    </span>
+                  </div>
+
+                  <div className="flex items-center text-xs">
+                    <span className={`mr-2 ${passwordStrength.minLength ? 'text-green-600 font-bold' : 'text-gray-400'}`}>
+                      {passwordStrength.minLength ? '✓' : '○'}
+                    </span>
+                    <span className={passwordStrength.minLength ? 'text-green-700 font-medium' : 'text-gray-600'}>
+                      At least 6 characters
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div>
